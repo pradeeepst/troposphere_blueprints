@@ -6,6 +6,7 @@ from troposphere.ec2 import PortRange, NetworkAcl, Route, \
     VPC, NetworkInterfaceProperty, NetworkAclEntry, \
     SubnetNetworkAclAssociation, EIP, Instance, InternetGateway, \
     SecurityGroupRule, SecurityGroup, VPCDHCPOptionsAssociation
+
 t = Template()
 
 # may be used as a region mapping
@@ -34,37 +35,34 @@ VPC = t.add_resource(
 InternetGateway = t.add_resource(
     InternetGateway(
         "ClientInternetGateway",
-         DependsOn = VPC,
-         Tags=Tags(
+        DependsOn=VPC,
+        Tags=Tags(
             Application=ref_stack_id,
             Name="ClientInternetGateway"),
-            ))
+    ))
 
 InternetGatewayAttachment = t.add_resource(
     VPCGatewayAttachment("InternetGatewayAttachment",
-                            DependsOn = InternetGateway,
-                            VpcId = Ref(VPC),
-                            InternetGatewayId = Ref(InternetGateway),
+                         DependsOn=InternetGateway,
+                         VpcId=Ref(VPC),
+                         InternetGatewayId=Ref(InternetGateway),
                          ))
 ClientRouteTable = t.add_resource(
     RouteTable("ClientRouteTable",
-               DependsOn = InternetGateway,
-               VpcId = Ref(VPC),
-                Tags=Tags(
-                     Application=ref_stack_id,
-                     Name="ClientRouteTable"),
+               DependsOn=InternetGateway,
+               VpcId=Ref(VPC),
+               Tags=Tags(
+                   Application=ref_stack_id,
+                   Name="ClientRouteTable"),
                ))
-
 
 ClientRouteInternetAccess = t.add_resource(
     Route("ClientRouteInternetAccess",
-           DependsOn = InternetGateway,
-           DestinationCidrBlock = "0.0.0.0/0",
-           RouteTableId = Ref(ClientRouteTable),
-           GatewayId = Ref(InternetGateway),
-    )
-)
-
+          DependsOn=InternetGateway,
+          DestinationCidrBlock="0.0.0.0/0",
+          RouteTableId=Ref(ClientRouteTable),
+          GatewayId=Ref(InternetGateway),
+          ))
 
 # Security Groups
 MonitoringHostSecurityGroup = t.add_resource(SecurityGroup(
@@ -105,8 +103,8 @@ MonitoringHostSecurityGroup = t.add_resource(SecurityGroup(
     ],
     VpcId=Ref(VPC),
     Tags=Tags(
-            Application=ref_stack_id,
-            Name="MonitoringHostSecurityGroup"),
+        Application=ref_stack_id,
+        Name="MonitoringHostSecurityGroup"),
 ))
 CommonSecurityGroup = t.add_resource(SecurityGroup(
     'CommonSecurityGroup',
@@ -122,8 +120,8 @@ CommonSecurityGroup = t.add_resource(SecurityGroup(
     ],
     VpcId=Ref(VPC),
     Tags=Tags(
-            Application=ref_stack_id,
-            Name="CommonSecurityGroup"),
+        Application=ref_stack_id,
+        Name="CommonSecurityGroup"),
 ))
 HQSecurityGroup = t.add_resource(SecurityGroup(
     'HQSecurityGroup',
@@ -150,8 +148,8 @@ HQSecurityGroup = t.add_resource(SecurityGroup(
     ],
     VpcId=Ref(VPC),
     Tags=Tags(
-            Application=ref_stack_id,
-            Name="HQSecurityGroup"),
+        Application=ref_stack_id,
+        Name="HQSecurityGroup"),
 ))
 
 RancherHostSecurityGroup = t.add_resource(SecurityGroup(
@@ -179,8 +177,8 @@ RancherHostSecurityGroup = t.add_resource(SecurityGroup(
     ],
     VpcId=Ref(VPC),
     Tags=Tags(
-            Application=ref_stack_id,
-            Name="RancherHostSecurityGroup"),
+        Application=ref_stack_id,
+        Name="RancherHostSecurityGroup"),
 ))
 NFSSecurityGroup = t.add_resource(SecurityGroup(
     'NFSSecurityGroup',
@@ -213,8 +211,8 @@ NFSSecurityGroup = t.add_resource(SecurityGroup(
     ],
     VpcId=Ref(VPC),
     Tags=Tags(
-            Application=ref_stack_id,
-            Name="NFSSecurityGroup"),
+        Application=ref_stack_id,
+        Name="NFSSecurityGroup"),
 ))
 
 Client1Subnet = t.add_resource(
@@ -226,20 +224,80 @@ Client1Subnet = t.add_resource(
             Application=ref_stack_id,
             Name="Client1Subnet")))
 
-# Client1SubnetRouteTable = t.add_resource(
-#     SubnetRouteTableAssociation('Client1SubnetRouteTable',
-#                                 RouteTableId = Ref(RouteTable),
-#                                 SubnetId = Ref(Client1Subnet),
-#     ))
+Client1SubnetAssociation = t.add_resource(SubnetRouteTableAssociation
+                                          ("Client1SubnetAssociation",
+                                           SubnetId=Ref(Client1Subnet),
+                                           RouteTableId=Ref(ClientRouteTable)))
 
 Client1NetworkAcl = t.add_resource(NetworkAcl("Client1NetworkAcl",
-                                              VpcId = Ref(VPC),
+                                              VpcId=Ref(VPC),
                                               ))
 
-Client1NetworkAclRules = t.add_resource(NetworkAclEntry("Client1NetworkAcl",
-                                                        NetworkAclId = Ref(Client1NetworkAcl),
-                                                        RuleNumber = ))
+Client1NetworkAclAssociation = t.add_resource(SubnetNetworkAclAssociation
+                                             ("Client1NetworkAclAssociation",
+                                              NetworkAclId=Ref(Client1NetworkAcl),
+                                              SubnetId=Ref(Client1Subnet)))
 
+Client1NetworkAclInboundAllowSubnet = t.add_resource(NetworkAclEntry
+                                                     ("Client1NetworkAclInboundAllowSubnet",
+                                                      NetworkAclId=Ref(Client1NetworkAcl),
+                                                      RuleNumber=100,
+                                                      CidrBlock="10.62.1.0/24",
+                                                      RuleAction="allow",
+                                                      PortRange=PortRange(To="-1", From="-1"),
+                                                      Protocol="-1",
+                                                      Egress="false",
+                                                      ))
+Client1NetworkAclInbooundDenyVpc = t.add_resource(NetworkAclEntry
+                                                  ("Client1NetworkAclInboundDenyVpc",
+                                                   NetworkAclId=Ref(Client1NetworkAcl),
+                                                   RuleNumber=110,
+                                                   CidrBlock="10.62.0.0/16",
+                                                   RuleAction="deny",
+                                                   PortRange=PortRange(To="-1", From="-1"),
+                                                   Protocol="-1",
+                                                   Egress="false",
+                                                   ))
+Client1NetworkAclInboundAllowAll = t.add_resource(NetworkAclEntry
+                                                  ("Client1NetworkAclInboundAllowAll",
+                                                   NetworkAclId=Ref(Client1NetworkAcl),
+                                                   RuleNumber=120,
+                                                   CidrBlock="0.0.0.0/0",
+                                                   RuleAction="allow",
+                                                   PortRange=PortRange(To="-1", From="-1"),
+                                                   Protocol="-1",
+                                                   Egress="false",
+                                                   ))
+Client1NetworkAclOutboundAllowSubnet = t.add_resource(NetworkAclEntry
+                                                      ("Client1NetworkAclOutboundAllowSubnet",
+                                                       NetworkAclId=Ref(Client1NetworkAcl),
+                                                       RuleNumber=100,
+                                                       CidrBlock="10.62.1.0/24",
+                                                       RuleAction="allow",
+                                                       PortRange=PortRange(To="-1", From="-1"),
+                                                       Protocol="-1",
+                                                       Egress="true",
+                                                       ))
+Client1NetworkAclOutboundDenyVpc = t.add_resource(NetworkAclEntry
+                                                  ("Client1NetworkAclOutboundDenyVpc",
+                                                   NetworkAclId=Ref(Client1NetworkAcl),
+                                                   RuleNumber=110,
+                                                   CidrBlock="10.62.0.0/16",
+                                                   RuleAction="deny",
+                                                   PortRange=PortRange(To="-1", From="-1"),
+                                                   Protocol="-1",
+                                                   Egress="true",
+                                                   ))
+Client1NetworkAclOutboundAllowAll = t.add_resource(NetworkAclEntry
+                                                   ("Client1NetworkAclOutboundAllowAll",
+                                                    NetworkAclId=Ref(Client1NetworkAcl),
+                                                    RuleNumber=120,
+                                                    CidrBlock="0.0.0.0/0",
+                                                    RuleAction="allow",
+                                                    PortRange=PortRange(To="-1", From="-1"),
+                                                    Protocol="-1",
+                                                    Egress="true",
+                                                    ))
 Client2Subnet = t.add_resource(
     Subnet(
         'Client2Subnet',
@@ -249,6 +307,81 @@ Client2Subnet = t.add_resource(
             Application=ref_stack_id,
             Name="Client2Subnet")))
 
+Client2NetworkAcl = t.add_resource(NetworkAcl("Client2NetworkAcl",
+                                              VpcId=Ref(VPC),
+                                              ))
+
+Client2SubnetAssociation = t.add_resource(SubnetRouteTableAssociation
+                                          ("Client2SubnetAssociation",
+                                           SubnetId=Ref(Client2Subnet),
+                                           RouteTableId=Ref(ClientRouteTable)))
+
+Client2NetworkAclAssociation = t.add_resource(SubnetNetworkAclAssociation
+                                             ("Client2NetworkAclAssociation",
+                                              NetworkAclId=Ref(Client2NetworkAcl),
+                                              SubnetId=Ref(Client2Subnet)))
+
+Client2NetworkAclInboundAllowSubnet = t.add_resource(NetworkAclEntry
+                                                     ("Client2NetworkAclInboundAllowSubnet",
+                                                      NetworkAclId=Ref(Client2NetworkAcl),
+                                                      RuleNumber=100,
+                                                      CidrBlock="10.62.2.0/24",
+                                                      RuleAction="allow",
+                                                      PortRange=PortRange(To="-1", From="-1"),
+                                                      Protocol="-1",
+                                                      Egress="false",
+                                                      ))
+Client2NetworkAclInbooundDenyVpc = t.add_resource(NetworkAclEntry
+                                                  ("Client2NetworkAclInboundDenyVpc",
+                                                   NetworkAclId=Ref(Client2NetworkAcl),
+                                                   RuleNumber=110,
+                                                   CidrBlock="10.62.0.0/16",
+                                                   RuleAction="deny",
+                                                   PortRange=PortRange(To="-1", From="-1"),
+                                                   Protocol="-1",
+                                                   Egress="false",
+                                                   ))
+Client2NetworkAclInboundAllowAll = t.add_resource(NetworkAclEntry
+                                                  ("Client2NetworkAclInboundAllowAll",
+                                                   NetworkAclId=Ref(Client2NetworkAcl),
+                                                   RuleNumber=120,
+                                                   CidrBlock="0.0.0.0/0",
+                                                   RuleAction="allow",
+                                                   PortRange=PortRange(To="-1", From="-1"),
+                                                   Protocol="-1",
+                                                   Egress="false",
+                                                   ))
+Client2NetworkAclOutboundAllowSubnet = t.add_resource(NetworkAclEntry
+                                                      ("Client2NetworkAclOutboundAllowSubnet",
+                                                       NetworkAclId=Ref(Client2NetworkAcl),
+                                                       RuleNumber=100,
+                                                       CidrBlock="10.62.2.0/24",
+                                                       RuleAction="allow",
+                                                       PortRange=PortRange(To="-1", From="-1"),
+                                                       Protocol="-1",
+                                                       Egress="true",
+                                                       ))
+Client2NetworkAclOutboundDenyVpc = t.add_resource(NetworkAclEntry
+                                                  ("Client2NetworkAclOutboundDenyVpc",
+                                                   NetworkAclId=Ref(Client2NetworkAcl),
+                                                   RuleNumber=110,
+                                                   CidrBlock="10.62.0.0/16",
+                                                   RuleAction="deny",
+                                                   PortRange=PortRange(To="-1", From="-1"),
+                                                   Protocol="-1",
+                                                   Egress="true",
+                                                   ))
+Client2NetworkAclOutboundAllowAll = t.add_resource(NetworkAclEntry
+                                                   ("Client2NetworkAclOutboundAllowAll",
+                                                    NetworkAclId=Ref(Client2NetworkAcl),
+                                                    RuleNumber=120,
+                                                    CidrBlock="0.0.0.0/0",
+                                                    RuleAction="allow",
+                                                    PortRange=PortRange(To="-1", From="-1"),
+                                                    Protocol="-1",
+                                                    Egress="true",
+                                                    ))
+
 Client3Subnet = t.add_resource(
     Subnet(
         'Client3Subnet',
@@ -257,6 +390,82 @@ Client3Subnet = t.add_resource(
         Tags=Tags(
             Application=ref_stack_id,
             Name="Client3Subnet")))
+
+Client3SubnetAssociation = t.add_resource(SubnetRouteTableAssociation
+                                          ("Client3SubnetAssociation",
+                                           SubnetId=Ref(Client3Subnet),
+                                           RouteTableId=Ref(ClientRouteTable)))
+
+Client3NetworkAcl = t.add_resource(NetworkAcl("Client3NetworkAcl",
+                                              VpcId=Ref(VPC),
+                                              ))
+
+
+Client3NetworkAclAssociation = t.add_resource(SubnetNetworkAclAssociation
+                                             ("Client3NetworkAclAssociation",
+                                              NetworkAclId=Ref(Client3NetworkAcl),
+                                              SubnetId=Ref(Client3Subnet)))
+
+Client3NetworkAclInboundAllowSubnet = t.add_resource(NetworkAclEntry
+                                                     ("Client3NetworkAclInboundAllowSubnet",
+                                                      NetworkAclId=Ref(Client3NetworkAcl),
+                                                      RuleNumber=100,
+                                                      CidrBlock="10.62.3.0/24",
+                                                      RuleAction="allow",
+                                                      PortRange=PortRange(To="-1", From="-1"),
+                                                      Protocol="-1",
+                                                      Egress="false",
+                                                      ))
+Client3NetworkAclInbooundDenyVpc = t.add_resource(NetworkAclEntry
+                                                  ("Client3NetworkAclInboundDenyVpc",
+                                                   NetworkAclId=Ref(Client3NetworkAcl),
+                                                   RuleNumber=110,
+                                                   CidrBlock="10.62.0.0/16",
+                                                   RuleAction="deny",
+                                                   PortRange=PortRange(To="-1", From="-1"),
+                                                   Protocol="-1",
+                                                   Egress="false",
+                                                   ))
+Client3NetworkAclInboundAllowAll = t.add_resource(NetworkAclEntry
+                                                  ("Client3NetworkAclInboundAllowAll",
+                                                   NetworkAclId=Ref(Client3NetworkAcl),
+                                                   RuleNumber=120,
+                                                   CidrBlock="0.0.0.0/0",
+                                                   RuleAction="allow",
+                                                   PortRange=PortRange(To="-1", From="-1"),
+                                                   Protocol="-1",
+                                                   Egress="false",
+                                                   ))
+Client3NetworkAclOutboundAllowSubnet = t.add_resource(NetworkAclEntry
+                                                      ("Client3NetworkAclOutboundAllowSubnet",
+                                                       NetworkAclId=Ref(Client3NetworkAcl),
+                                                       RuleNumber=100,
+                                                       CidrBlock="10.62.3.0/24",
+                                                       RuleAction="allow",
+                                                       PortRange=PortRange(To="-1", From="-1"),
+                                                       Protocol="-1",
+                                                       Egress="true",
+                                                       ))
+Client3NetworkAclOutboundDenyVpc = t.add_resource(NetworkAclEntry
+                                                  ("Client3NetworkAclOutboundDenyVpc",
+                                                   NetworkAclId=Ref(Client3NetworkAcl),
+                                                   RuleNumber=110,
+                                                   CidrBlock="10.62.0.0/16",
+                                                   RuleAction="deny",
+                                                   PortRange=PortRange(To="-1", From="-1"),
+                                                   Protocol="-1",
+                                                   Egress="true",
+                                                   ))
+Client3NetworkAclOutboundAllowAll = t.add_resource(NetworkAclEntry
+                                                   ("Client3NetworkAclOutboundAllowAll",
+                                                    NetworkAclId=Ref(Client3NetworkAcl),
+                                                    RuleNumber=120,
+                                                    CidrBlock="0.0.0.0/0",
+                                                    RuleAction="allow",
+                                                    PortRange=PortRange(To="-1", From="-1"),
+                                                    Protocol="-1",
+                                                    Egress="true",
+                                                    ))
 
 t.add_output([
     Output(
